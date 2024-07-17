@@ -13,6 +13,10 @@ class My_Custom_Gateway extends WC_Payment_Gateway {
     <b>Note: </b>Please add the following URL to Your Squad dashboard WebHook Option: <b><i>'.get_site_url().'/wc-api/squad_webhook</i></b>', 'my-custom-gateway');
     
     // Other initialization code goes here
+    $this->order_id_prepend = 'MEAK';
+    $this->order_id_append = 'G75';
+
+
     
     $this->init_form_fields();
     $this->init_settings();
@@ -35,6 +39,8 @@ class My_Custom_Gateway extends WC_Payment_Gateway {
     
     $this->payment_init_url = ($this->testmode == 'yes') ? 'https://sandbox-api-d.squadco.com/transaction/initiate' : 'https://api-d.squadco.com/transaction/initiate';
 
+    $this->payment_verification_url_stub = 'https://sandbox-api-d.squadco.com/transaction/verify/';
+
     if( empty($this->success_url) || $this->success_url == null ){
         $this->success_url = get_site_url();
     }
@@ -49,8 +55,11 @@ class My_Custom_Gateway extends WC_Payment_Gateway {
     
     add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
-    // Register a webhook
-    add_action( 'woocommerce_api_squad_webhook', array( $this, 'webhook' ) );     
+    // Register a callback url to be called immediately payment is successful, allowing to navigate back to the app for appropriate notification and processing.
+    add_action( 'woocommerce_api_squad_success_callback', array( $this, 'success_callback_url' ) );   
+    
+    // Register a webhook for payment success notification - this can be called by the Pay Proccessor any time and may be done more than once after payment
+    //add_action( 'woocommerce_api_squad_webhook', array( $this, 'webhook' ) );
 
   }
   
@@ -87,7 +96,7 @@ class My_Custom_Gateway extends WC_Payment_Gateway {
                     'title'       => __('Success URL'),
                     'description' => __('This is the URL where Squad will redirect after payment was SUCCESSFUL. If you leave this field empty, it will be redirected to your site. Example: https://www.example.com/', 'my-custom-gateway'),
                     'type'        => 'text',
-                    'default'     => get_site_url().'/wc-api/squad_webhook'
+                    'default'     => get_site_url().'/wc-api/squad_success_callback'
                 ),
                 'cancel_url' => array(
                     'title'       => __('Cancel URL'),
@@ -152,7 +161,7 @@ class My_Custom_Gateway extends WC_Payment_Gateway {
         'email'        => $order->get_billing_email(),
         'currency'     => $order->get_currency(),
         "initiate_type"=> "inline",
-        'transaction_ref'    => 'MEAK-'.$order_id.'-'.time(),
+        'transaction_ref'    => $this->order_id_prepend.'-'.$order_id.'-'.$this->order_id_append,
         'callback_url' => $this->get_option( 'success_url' ),
     );
     //$wc_logger->debug( 'debug tracker3 : made request', array( 'source' => 'MAAK Debug' ) );
@@ -193,13 +202,86 @@ return array(
 } else {
     $wc_logger->debug( 'inside process_payment 3 : request failed', array( 'source' => 'MAAK Debug' ) );
 
-return;
+    wp_redirect( $this->get_return_url( $order ) );
+
+//return;
+
 }
 
   }
 
 
-  public function webhook() {
+  public function verify_payment($order_id){
+
+    $verification_url = $this->payment_verification_url_stub.$this->order_id_prepend.'-'.$order_id.'-'.$this->order_id_append;
+
+    $wc_logger = wc_get_logger();
+
+    $wc_logger->debug( 'Responding To Payment Verification call', array( 'source' => 'MEAK Verify Payment Debug' ) );
+    $wc_logger->debug( 'url: '.$verification_url , array( 'source' => 'MEAK Verify Payment Debug' ) );
+
+    $headers = array(
+        'Authorization' => 'Bearer ' . $this->secret_key,
+        'Content-Type'  => 'application/json'
+    );
+
+    $args = array(
+        'headers' => $headers,
+        'timeout' => 60
+    );  
+    $request = wp_remote_get( $verification_url , $args );
+
+      $wc_logger->debug( 'Responding To Payment Verification call : ret payload'.print_r( $request, true ) , array( 'source' => 'MAAK Verify Payment Payload' ) );
+
+    if ( ! is_wp_error( $request ) && 200 === wp_remote_retrieve_response_code( $request ) ) {
+
+        $squad_response = json_decode( wp_remote_retrieve_body( $request ) );
+        $wc_logger->debug( 'inside verify_payment 1 : request succeed' , array( 'source' => 'MAAK Verify Payment Debug' ));
+
+        if($squad_response->status == 200 && strtolower($squad_response->data->transaction_status) == 'success'){
+            $squad_response = json_decode( wp_remote_retrieve_body( $request ) );
+
+            $wc_logger->debug( 'inside verify_payment  : request succeed 2' , array( 'source' => 'MAAK Verify Payment Debug' ));
+
+          return array(
+            'status' => true,
+            'amount_paid'  => $squad_response->data->transaction_amount,
+            'currency_symbol' => $squad_response->data->transaction_currency_id
+        );
+
+        }
+        else{
+
+            $squad_response = json_decode( wp_remote_retrieve_body( $request ) );
+            
+            $wc_logger->debug( 'inside verify_payment else : request failed 2', array( 'source' => 'MAAK Verify Payment Debug' ) );
+            
+          return array(
+            'status' => false,
+            'amount_paid'  => '',
+            'currency_symbol' => ''
+        );
+
+        }
+        
+        } else {
+            $wc_logger->debug( 'inside verify_payment else : request failed 1', array( 'source' => 'MAAK Verify Payment Debug' ) );
+        
+        return array(
+            'status' => false,
+            'amount_paid'  => '',
+            'currency_symbol' => ''
+        );
+
+        }
+
+
+  }
+
+
+
+
+  public function webhookX() {
 
     $wc_logger = wc_get_logger();
 
@@ -214,7 +296,36 @@ return;
 
   }
 
+  public function success_callback_url() {
 
+    $wc_logger = wc_get_logger();
+
+    $wc_logger->debug( 'Responding To Payment Success URL', array( 'source' => 'MEAK Success Callback Debug' ) );
+    $wc_logger->debug( 'reference: '.$_GET[ 'reference' ] , array( 'source' => 'MEAK Success Callback Debug' ) );
+    $orderid = explode('-',$_GET[ 'reference' ]);
+
+
+
+    $order = wc_get_order( $orderid[1] );
+    //if payment verification failed, halt and redirect
+    $verify = $this->verify_payment($orderid[1]);
+    if(!$verify['status']) $this->get_return_url( $order );
+
+    $order_currency = method_exists($order, 'get_currency') ? $order->get_currency() : $order->get_order_currency();
+    $currency_symbol = get_woocommerce_currency_symbol($order_currency);
+
+    if($order->get_total() > (floatval($verify['amount_paid'])/100) || $verify['currency_symbol'] != $currency_symbol){
+
+        $order->update_status('on-hold', '');
+        $order->reduce_order_stock();     
+        wp_redirect( $this->get_return_url( $order ) );
+    }
+
+	$order->payment_complete();
+	$order->reduce_order_stock();
+    wp_redirect( $this->get_return_url( $order ) );
+
+  }
   
 }
 ?>
