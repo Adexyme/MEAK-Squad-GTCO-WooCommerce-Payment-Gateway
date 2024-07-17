@@ -152,7 +152,7 @@ class My_Custom_Gateway extends WC_Payment_Gateway {
         'email'        => $order->get_billing_email(),
         'currency'     => $order->get_currency(),
         "initiate_type"=> "inline",
-        'transaction_ref'    => ''.$order_id.'',
+        'transaction_ref'    => 'MEAK-'.$order_id.'-'.time(),
         'callback_url' => $this->get_option( 'success_url' ),
     );
     //$wc_logger->debug( 'debug tracker3 : made request', array( 'source' => 'MAAK Debug' ) );
@@ -201,11 +201,13 @@ return;
 
   public function webhook() {
 
-        $wc_logger = wc_get_logger();
+    $wc_logger = wc_get_logger();
 
     $wc_logger->debug( 'Responding To Payment WebHook', array( 'source' => 'MEAK WebHook Debug' ) );
     $wc_logger->debug( 'reference: '.$_GET[ 'reference' ] , array( 'source' => 'MEAK WebHook Debug' ) );
-    $order = wc_get_order( $_GET[ 'reference' ] );
+    $orderid = explode('-',$_GET[ 'reference' ]);
+
+    $order = wc_get_order( $orderid[1 ] );
 	$order->payment_complete();
 	$order->reduce_order_stock();
     wp_redirect( $this->get_return_url( $order ) );
