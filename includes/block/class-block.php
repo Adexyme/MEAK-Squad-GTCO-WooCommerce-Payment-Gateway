@@ -66,7 +66,8 @@ final class My_Custom_Gateway_Blocks extends AbstractPaymentMethodType
     {
         return [
             'title' => $this->gateway->title,
-            //'description' => $this->gateway->description,
+            'description' => $this->gateway->description,
+            'logo_url' => $this->gateway->logo_url,
         ];
     }
 

@@ -16,7 +16,9 @@ class My_Custom_Gateway extends WC_Payment_Gateway
         $this->icon = 'https://www.raastid.com/assets/images/logoIcon/light_logo.png';
         $this->method_title = __('MEAK Squad GTCO Custom Gateway', 'my-custom-gateway');
         $this->method_description = __('Accept payments through Squad GTCO numerous Online/Offline Payment Options - Credit Cards, USSD, Bank Transfer, Payment Link, Virtual Account e.t.c. <br>
-    <b>Note: </b>Please add the following URL to Your Squad dashboard WebHook Option: <b><i>' . get_site_url() . '/wc-api/squad_webhook</i></b>', 'my-custom-gateway');
+    <b>Optional: </b>Set your Squad dashboard Webhook url <a href="https://dashboard.squadco.com/profile/api-webhooks">here</a> to the url below: <br><b><i>' . get_site_url() . '/wc-api/squad_webhook</i></b>', 'my-custom-gateway');
+
+
 
         // Other initialization code goes here
         $this->order_id_prepend = 'MEAK';
