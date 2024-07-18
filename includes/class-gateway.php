@@ -1,4 +1,8 @@
 <?php
+
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly.
+}
 class My_Custom_Gateway extends WC_Payment_Gateway
 {
 
@@ -61,10 +65,14 @@ class My_Custom_Gateway extends WC_Payment_Gateway
         add_action('woocommerce_api_squad_success_callback', array($this, 'success_callback_url'));
 
         // Register a webhook for payment success notification - this can be called by the Pay Proccessor any time and may be done more than once after payment
-        //add_action( 'woocommerce_api_squad_webhook', array( $this, 'webhook' ) );
+        add_action('woocommerce_api_squad_webhook', array($this, 'webhook'));
 
     }
 
+    /**
+     * Summary of init_form_fields
+     * @return void
+     */
     public function init_form_fields()
     {
 
@@ -111,7 +119,7 @@ class My_Custom_Gateway extends WC_Payment_Gateway
                 'title' => __('Logo Url'),
                 'description' => __('Your Site Logo URL. If you leave this field empty, it will use Squad icon.  Example: https://www.example.com/image.png', 'my-custom-gateway'),
                 'type' => 'text',
-                'default' => ''
+                'default' => 'http://localhost/wp_takora/wp-content/plugins/squad-payment-gateway/assets/images/logo.png'
             ),
             'publishable_key' => array(
                 'title' => __('Public Key'),
@@ -141,14 +149,18 @@ class My_Custom_Gateway extends WC_Payment_Gateway
         );
     }
 
-    // Process the payment
+    /**
+     * Summary of process_payment
+     * @param mixed $order_id
+     * @return array
+     */
     public function process_payment($order_id)
     {
         //global $woocommerce;
 
-        $wc_logger = wc_get_logger();
+        //$wc_logger = wc_get_logger();
 
-        $wc_logger->debug('inside process_payment', array('source' => 'MAAK Debug'));
+        //$wc_logger->debug('inside process_payment', array('source' => 'MAAK Debug'));
 
         $order = wc_get_order($order_id);
         $amount = $order->get_total() * 100;
@@ -159,7 +171,7 @@ class My_Custom_Gateway extends WC_Payment_Gateway
 
         //if($order->get_currency() != 'NGN' || $order->get_currency() != 'USD') die('Your currency is not supported by Squad - maak_payment_gateway/process_payment') ;
 
-        $wc_logger->debug('debug tracker2 : made request', array('source' => 'MAAK Debug'));
+        //$wc_logger->debug('debug tracker2 : made request', array('source' => 'MAAK Debug'));
         $squad_payment_params = array(
             'amount' => absint($amount),
             'email' => $order->get_billing_email(),
@@ -184,27 +196,27 @@ class My_Custom_Gateway extends WC_Payment_Gateway
 
         $squad_payment_init_url = $this->payment_init_url;
 
-        $wc_logger->debug('inside process_payment x : payload' . print_r($args, true), array('source' => 'MAAK Debug'));
+        //$wc_logger->debug('inside process_payment x : payload' . print_r($args, true), array('source' => 'MAAK Debug'));
 
-        $wc_logger->debug('inside process_payment y : url: ' . $squad_payment_init_url, array('source' => 'MAAK Debug'));
+        //$wc_logger->debug('inside process_payment y : url: ' . $squad_payment_init_url, array('source' => 'MAAK Debug'));
 
         $request = wp_remote_post($squad_payment_init_url, $args);
 
         // $wc_logger->debug( 'debug tracker4 : error code:'.wp_remote_retrieve_response_code( $request ), array( 'source' => 'MAAK Debug' ) );
 
-        $wc_logger->debug('inside process_payment 2 : request body' . print_r($request, true), array('source' => 'MAAK Debug'));
+        //$wc_logger->debug('inside process_payment 2 : request body' . print_r($request, true), array('source' => 'MAAK Debug'));
 
         if (!is_wp_error($request) && 200 === wp_remote_retrieve_response_code($request)) {
 
             $squad_response = json_decode(wp_remote_retrieve_body($request));
-            $wc_logger->debug('inside process_payment 3 : request succeed', array('source' => 'MAAK Debug'));
+            //$wc_logger->debug('inside process_payment 3 : request succeed', array('source' => 'MAAK Debug'));
             return array(
                 'result' => 'success',
                 'redirect' => $squad_response->data->checkout_url,
             );
 
         } else {
-            $wc_logger->debug('inside process_payment 3 : request failed', array('source' => 'MAAK Debug'));
+            //$wc_logger->debug('inside process_payment 3 : request failed', array('source' => 'MAAK Debug'));
 
             wp_redirect($this->get_return_url($order));
 
@@ -214,16 +226,20 @@ class My_Custom_Gateway extends WC_Payment_Gateway
 
     }
 
-
+    /**
+     * Summary of verify_payment
+     * @param mixed $order_id
+     * @return array
+     */
     protected function verify_payment($order_id)
     {
 
         $verification_url = $this->payment_verification_url_stub . $this->order_id_prepend . '-' . $order_id . '-' . $this->order_id_append;
 
-        $wc_logger = wc_get_logger();
+        //$wc_logger = wc_get_logger();
 
-        $wc_logger->debug('Responding To Payment Verification call', array('source' => 'MEAK Verify Payment Debug'));
-        $wc_logger->debug('url: ' . $verification_url, array('source' => 'MEAK Verify Payment Debug'));
+        //$wc_logger->debug('Responding To Payment Verification call', array('source' => 'MEAK Verify Payment Debug'));
+        //$wc_logger->debug('url: ' . $verification_url, array('source' => 'MEAK Verify Payment Debug'));
 
         $headers = array(
             'Authorization' => 'Bearer ' . $this->secret_key,
@@ -236,17 +252,17 @@ class My_Custom_Gateway extends WC_Payment_Gateway
         );
         $request = wp_remote_get($verification_url, $args);
 
-        $wc_logger->debug('Responding To Payment Verification call : ret payload' . print_r($request, true), array('source' => 'MAAK Verify Payment Payload'));
+        //$wc_logger->debug('Responding To Payment Verification call : ret payload' . print_r($request, true), array('source' => 'MAAK Verify Payment Payload'));
 
         if (!is_wp_error($request) && 200 === wp_remote_retrieve_response_code($request)) {
 
             $squad_response = json_decode(wp_remote_retrieve_body($request));
-            $wc_logger->debug('inside verify_payment 1 : request succeed', array('source' => 'MAAK Verify Payment Debug'));
+            //$wc_logger->debug('inside verify_payment 1 : request succeed', array('source' => 'MAAK Verify Payment Debug'));
 
             if ($squad_response->status == 200 && strtolower($squad_response->data->transaction_status) == 'success') {
                 $squad_response = json_decode(wp_remote_retrieve_body($request));
 
-                $wc_logger->debug('inside verify_payment  : request succeed 2', array('source' => 'MAAK Verify Payment Debug'));
+                //$wc_logger->debug('inside verify_payment  : request succeed 2', array('source' => 'MAAK Verify Payment Debug'));
 
                 return array(
                     'status' => true,
@@ -259,7 +275,7 @@ class My_Custom_Gateway extends WC_Payment_Gateway
 
                 $squad_response = json_decode(wp_remote_retrieve_body($request));
 
-                $wc_logger->debug('inside verify_payment else : request failed 2', array('source' => 'MAAK Verify Payment Debug'));
+                //$wc_logger->debug('inside verify_payment else : request failed 2', array('source' => 'MAAK Verify Payment Debug'));
 
 
                 return array(
@@ -271,7 +287,7 @@ class My_Custom_Gateway extends WC_Payment_Gateway
             }
 
         } else {
-            $wc_logger->debug('inside verify_payment else : request failed 1', array('source' => 'MAAK Verify Payment Debug'));
+            //$wc_logger->debug('inside verify_payment else : request failed 1', array('source' => 'MAAK Verify Payment Debug'));
 
             return array(
                 'status' => false,
@@ -286,23 +302,31 @@ class My_Custom_Gateway extends WC_Payment_Gateway
 
 
 
-
-    public function webhookX()
+    /**
+     * Summary of webhook
+     * @return void
+     */
+    public function webhook()
     {
-
+        // Retrieve the request's body
+        $json = @file_get_contents('php://input');
         $wc_logger = wc_get_logger();
 
         $wc_logger->debug('Responding To Payment WebHook', array('source' => 'MEAK WebHook Debug'));
-        $wc_logger->debug('reference: ' . $_GET['reference'], array('source' => 'MEAK WebHook Debug'));
-        $orderid = explode('-', $_GET['reference']);
+        $wc_logger->debug('Payload: ' . print_r($json, true), array('source' => 'MEAK WebHook Debug'));
+        //$orderid = explode('-', $_GET['reference']);
 
-        $order = wc_get_order($orderid[1]);
-        $order->payment_complete();
-        $order->reduce_order_stock();
-        wp_redirect($this->get_return_url($order));
+        //$order = wc_get_order($orderid[1]);
+        //$order->payment_complete();
+        //$order->reduce_order_stock();
+        //wp_redirect($this->get_return_url($order));
 
     }
 
+    /**
+     * Summary of success_callback_url
+     * @return void
+     */
     public function success_callback_url()
     {
 
@@ -347,4 +371,3 @@ class My_Custom_Gateway extends WC_Payment_Gateway
     }
 
 }
-?>
